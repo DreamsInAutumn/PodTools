@@ -1,0 +1,122 @@
+#!/bin/bash
+
+# argument expansion
+        pod=$1
+        command=$2
+
+# configuration
+        welcome="\nPodMan Utility v0.3 ;) (c) ACM\n"
+        podHome=/srv/podman
+        podExec=/opt/podman/$pod/init.sh
+        podInstall=/opt/podman/$pod/install.sh
+
+function checkArgs {
+        #check if pod string is empty
+        if [ -z "$pod" ] ; then
+                echo "[fatal] please supply a pod (directoy) argument."
+                exit 1
+        else
+                echo "[ok] pod argument $pod found;"
+        fi
+
+        #check if dir+pod exists in the filesystem
+        if [ -d "$podHome/$pod" ]; then
+                echo "[ok] pod directory $podHome/$pod found"
+        else
+                echo "[fatal] pod directory $podHome/$pod does not exist! please create a directory for the pod."
+                exit 1
+        fi
+
+        #check if a pod command  was passed
+        if [ -z "$command" ]; then
+                echo "[fatal] pod command not supplied - start/stop/create/install/exec"
+                exit 2
+        else
+                echo "[ok] pod command: $command found"
+        fi
+}
+
+function sanitizePodVar {
+        # if tab-complete was used, there's a chance that there is a trailing / on the pod variable, we need to strip this.
+
+        local lastConfChar="none"
+        local lastConfChar=${pod: -1}
+
+        if [ "$lastConfChar" == "/" ]; then
+                pod=${pod::-1}
+                echo "[ok] stripping trailing /"
+        fi
+}
+
+function createPod {
+        local localCreateFile=$podHome/$pod/create.sh
+
+        if [ -f "$localCreateFile" ]; then
+                echo "[ok] pod creation file $localCreateFile exists"
+                $localCreateFile $pod
+        else
+                echo "[fatal] pod creation file $localCreateFile does not exist"
+                exit 1
+        fi
+}
+
+function execPod {
+        echo "executing pod: $pod ..."
+        podman container exec -it $pod $podExec
+}
+
+function execPodAdmin {
+        echo "executing pod: $pod ..."
+        podman container exec -it $pod /bin/sh
+}
+
+function startPod {
+        echo "starting pod: $pod ..."
+        podman container start $pod
+}
+
+function stopPod {
+        echo "stopping pod: $pod ..."
+        podman container stop $pod -t0
+}
+
+function deletePod {
+        echo "deleting pod: $pod ..."
+        podman container rm $pod
+}
+
+function installPod {
+        local localInstallFile=$podHome/$pod/install.sh
+        echo "installing pod: $pod with installer $podInstaller"
+
+        if [ -f "$localInstallFile" ]; then
+                echo "[ok] pod installation file $localInstallFile exists"
+                podman container exec -it $pod $podInstall
+        else
+                echo "[fatal] pod installation file $localInstallFile does not exist"
+                exit 1
+        fi
+}
+
+function _main {
+        echo -e "$welcome"
+
+        checkArgs;
+        sanitizePodVar;
+
+        case $command  in
+                create)         createPod ;;
+                exec)           execPod ;;
+                admin)          execPodAdmin ;;
+                start)          startPod ;;
+                stop)           stopPod ;;
+                install)        installPod ;;
+                delete)         deletePod ;;
+
+                *)  echo "[fatal] unknown command" ;;
+        esac
+        echo -e ""
+}
+
+_main
+exit 0
